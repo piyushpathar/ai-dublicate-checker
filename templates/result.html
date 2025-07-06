@@ -179,11 +179,15 @@
         pageFilter.addEventListener('change', filterItems);
 
         function copyToClipboard(li) {
-            const lines = Array.from(li.querySelectorAll('br'))
-                .map(br => br.previousSibling?.textContent?.trim())
-                .filter(Boolean)
-                .join('\n');
-            navigator.clipboard.writeText(lines).then(() => {
+            const lines = [];
+            const html = li.innerHTML;
+            const sentenceRegex = /→\s*(.*?)\s*<span/gi;
+            let match;
+            while ((match = sentenceRegex.exec(html)) !== null) {
+                lines.push(match[1].trim());
+            }
+
+            navigator.clipboard.writeText(lines.join('\n')).then(() => {
                 const btn = li.querySelector('.copy-btn');
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = 'Copy', 1000);
