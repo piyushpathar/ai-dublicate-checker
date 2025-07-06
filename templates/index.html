@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Upload Document</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            padding: 0;
+            margin: 0;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            animation: fadeIn 1s ease-in-out;
+        }
+
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 2rem;
+            width: 90%;
+            max-width: 480px;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            animation: slideUp 0.7s ease-out;
+            position: relative;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: 1.8rem;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+
+        p {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 2rem;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 1.2rem;
+        }
+
+        input[type="file"] {
+            display: none;
+        }
+
+        label {
+            display: inline-block;
+            background: linear-gradient(to right, #4facfe, #00f2fe);
+            color: white;
+            padding: 12px 20px;
+            font-size: 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        label:hover {
+            background: linear-gradient(to right, #00f2fe, #4facfe);
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background-color: rgba(255, 255, 255, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+            display: none;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 6px solid #ccc;
+            border-top-color: #764ba2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes slideUp {
+            from {
+                transform: translateY(30px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @media (max-width: 480px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            label {
+                font-size: 0.95rem;
+                padding: 10px 16px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loading-overlay" id="loader">
+        <div class="spinner"></div>
+    </div>
+
+    <div class="container">
+        <h1>Upload Document</h1>
+        <p>Select a .docx or .pdf file to check for duplicate lines.</p>
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="file" id="fileInput" accept=".docx,.pdf" onchange="handleUpload(this)">
+            <label for="fileInput" id="fileLabel">Choose file</label>
+        </form>
+    </div>
+
+    <script>
+        function handleUpload(input) {
+            const fileName = input.files[0]?.name || "Choose file";
+            document.getElementById("fileLabel").innerText = fileName;
+            if (input.files.length > 0) {
+                document.getElementById("loader").style.display = "flex";
+                document.getElementById("uploadForm").submit();
+            }
+        }
+    </script>
+</body>
+
+</html>
