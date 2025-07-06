@@ -13,4 +13,4 @@ RUN apt-get update && \
 
 COPY . .
 EXPOSE 3000
-CMD ["gunicorn", "app:app", "-b", "0.0.0.0:8080"]
+CMD ["python", "app.py"]
