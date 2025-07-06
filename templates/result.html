@@ -110,7 +110,7 @@
     <h1>Duplicate Lines Found</h1>
 
     <div class="controls">
-        <input type="text" id="searchInput" placeholder="Search...">
+        <input type="text" id="searchInput" placeholder="Search..." />
         <select id="sortSelect">
             <option value="">Sort by similarity</option>
             <option value="asc">Lowest First</option>
@@ -118,9 +118,17 @@
         </select>
         <select id="pageFilter">
             <option value="">Filter by page</option>
+            {% set page_numbers = [] %}
             {% for _, p1, __, p2, ___ in duplicates %}
-            <option value="{{ p1 }}">{{ p1 }}</option>
-            <option value="{{ p2 }}">{{ p2 }}</option>
+            {% if p1 not in page_numbers %}
+            {% set _ = page_numbers.append(p1) %}
+            {% endif %}
+            {% if p2 not in page_numbers %}
+            {% set _ = page_numbers.append(p2) %}
+            {% endif %}
+            {% endfor %}
+            {% for page in page_numbers %}
+            <option value="{{ page }}">{{ page }}</option>
             {% endfor %}
         </select>
     </div>
@@ -153,8 +161,7 @@
             let filtered = items.filter(li => {
                 const text = li.dataset.text.toLowerCase();
                 const pages = li.dataset.page;
-                return (!query || text.includes(query)) &&
-                    (!selectedPage || pages.includes(selectedPage));
+                return (!query || text.includes(query)) && (!selectedPage || pages.includes(selectedPage));
             });
 
             if (sortBy === 'asc') {
