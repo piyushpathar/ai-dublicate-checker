@@ -4,160 +4,191 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Upload Document</title>
+    <title>Upload Document & Check Duplicates</title>
     <style>
-        * {
-            box-sizing: border-box;
-            padding: 0;
-            margin: 0;
+        :root {
+            --primary: #667eea;
+            --secondary: #764ba2;
         }
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
             min-height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
-            background: linear-gradient(135deg, #667eea, #764ba2);
-            animation: fadeIn 1s ease-in-out;
+            justify-content: center;
+            color: #333;
+            padding: 1rem;
         }
 
-        .container {
+        .card {
             background: white;
             border-radius: 16px;
             padding: 2rem;
-            width: 90%;
-            max-width: 480px;
-            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.2);
-            text-align: center;
-            animation: slideUp 0.7s ease-out;
-            position: relative;
-            z-index: 1;
+            max-width: 600px;
+            width: 100%;
+            box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+            animation: fadeIn 0.6s ease;
         }
 
         h1 {
-            font-size: 1.8rem;
-            color: #333;
+            font-size: 1.6rem;
             margin-bottom: 1rem;
-        }
-
-        p {
-            font-size: 1rem;
-            color: #666;
-            margin-bottom: 2rem;
+            text-align: center;
         }
 
         form {
             display: flex;
             flex-direction: column;
-            gap: 1.2rem;
+            align-items: center;
+            gap: 1rem;
         }
 
         input[type="file"] {
             display: none;
         }
 
-        label {
-            display: inline-block;
-            background: linear-gradient(to right, #4facfe, #00f2fe);
+        label.upload-btn {
+            background: linear-gradient(to right, var(--primary), var(--secondary));
             color: white;
-            padding: 12px 20px;
-            font-size: 1rem;
+            padding: 12px 24px;
             border-radius: 8px;
             cursor: pointer;
-            transition: background 0.3s ease;
+            transition: background 0.3s;
         }
 
-        label:hover {
-            background: linear-gradient(to right, #00f2fe, #4facfe);
+        label.upload-btn:hover {
+            background: linear-gradient(to right, var(--secondary), var(--primary));
         }
 
-        .loading-overlay {
-            position: fixed;
-            inset: 0;
-            background-color: rgba(255, 255, 255, 0.8);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 999;
-            display: none;
+        .progress-container {
+            margin-top: 1.5rem;
+            width: 100%;
+            background: #eee;
+            border-radius: 8px;
+            overflow: hidden;
+            height: 20px;
         }
 
-        .spinner {
-            width: 60px;
-            height: 60px;
-            border: 6px solid #ccc;
-            border-top-color: #764ba2;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
+        .progress-bar {
+            width: 0;
+            height: 100%;
+            background: linear-gradient(to right, var(--primary), var(--secondary));
+            transition: width 0.3s ease;
+        }
+
+        ul {
+            margin-top: 2rem;
+            list-style: none;
+            padding: 0;
+        }
+
+        ul li {
+            background: #f9f9f9;
+            margin-bottom: 0.5rem;
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
         }
 
         @keyframes fadeIn {
             from {
                 opacity: 0;
-                transform: scale(0.95);
+                transform: translateY(20px);
             }
 
             to {
                 opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translateY(30px);
-                opacity: 0;
-            }
-
-            to {
                 transform: translateY(0);
-                opacity: 1;
-            }
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        @media (max-width: 480px) {
-            h1 {
-                font-size: 1.5rem;
-            }
-
-            label {
-                font-size: 0.95rem;
-                padding: 10px 16px;
             }
         }
     </style>
 </head>
 
 <body>
-    <div class="loading-overlay" id="loader">
-        <div class="spinner"></div>
-    </div>
-
-    <div class="container">
-        <h1>Upload Document</h1>
-        <p>Select a .docx or .pdf file to check for duplicate lines.</p>
-        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data">
-            <input type="file" name="file" id="fileInput" accept=".docx,.pdf" onchange="handleUpload(this)">
-            <label for="fileInput" id="fileLabel">Choose file</label>
+    <div class="card">
+        <h1>Upload Document & Check Duplicates</h1>
+        <form id="uploadForm">
+            <input type="file" id="fileInput" accept=".docx,.pdf" required />
+            <label for="fileInput" class="upload-btn" id="fileLabel">Choose file</label>
         </form>
+
+        <div class="progress-container" style="display:none;">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <ul id="result"></ul>
     </div>
 
     <script>
-        function handleUpload(input) {
-            const fileName = input.files[0]?.name || "Choose file";
-            document.getElementById("fileLabel").innerText = fileName;
-            if (input.files.length > 0) {
-                document.getElementById("loader").style.display = "flex";
-                document.getElementById("uploadForm").submit();
-            }
-        }
+        const uploadForm = document.getElementById("uploadForm");
+        const fileInput = document.getElementById("fileInput");
+        const fileLabel = document.getElementById("fileLabel");
+        const progressContainer = document.querySelector(".progress-container");
+        const progressBar = document.getElementById("progressBar");
+        const resultUl = document.getElementById("result");
+
+        fileInput.addEventListener("change", () => {
+            fileLabel.innerText = fileInput.files[0]?.name || "Choose file";
+        });
+
+        uploadForm.addEventListener("submit", function (e) {
+            e.preventDefault();
+        });
+
+        fileInput.addEventListener("change", () => {
+            if (!fileInput.files.length) return;
+            progressContainer.style.display = "block";
+            progressBar.style.width = "0%";
+            resultUl.innerHTML = "";
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            fetch("/process", { method: "POST", body: formData })
+                .then(response => {
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let accumulated = "";
+
+                    function read() {
+                        return reader.read().then(({ done, value }) => {
+                            if (done) return;
+                            accumulated += decoder.decode(value, { stream: true });
+                            let lines = accumulated.split("\n\n");
+                            accumulated = lines.pop(); // keep incomplete
+
+                            for (const line of lines) {
+                                if (line.startsWith("data: ")) {
+                                    const data = JSON.parse(line.replace("data: ", ""));
+                                    if (data.progress) {
+                                        progressBar.style.width = (parseFloat(progressBar.style.width) + 10) + "%";
+                                        progressBar.style.width = Math.min(100, progressBar.offsetWidth) + "%";
+                                        progressBar.style.width = (data.progress.includes("page") || data.progress.includes("paragraph")) ?
+                                            Math.min(100, parseInt(progressBar.style.width) + 5) + "%" : progressBar.style.width;
+                                    }
+                                    if (data.done) {
+                                        progressBar.style.width = "100%";
+                                        if (data.duplicates && data.duplicates.length) {
+                                            resultUl.innerHTML = data.duplicates.map(d =>
+                                                `<li>${d[0]} (${d[1]}) ↔ ${d[2]} (${d[3]}) [${d[4]}]</li>`
+                                            ).join('');
+                                        } else {
+                                            resultUl.innerHTML = "<li>No duplicates found</li>";
+                                        }
+                                    }
+                                }
+                            }
+                            return read();
+                        });
+                    }
+                    return read();
+                })
+                .catch(err => {
+                    resultUl.innerHTML = `<li style="color:red;">Error: ${err.message}</li>`;
+                });
+        });
     </script>
 </body>
 

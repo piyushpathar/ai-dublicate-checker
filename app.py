@@ -1,17 +1,18 @@
-from flask import Flask, render_template, request, abort
+from flask import Flask, render_template, request, Response, stream_with_context
 from werkzeug.utils import secure_filename
 from docx import Document
 import fitz
 import re
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
+import json
+import time
 
 app = Flask(__name__)
 model = SentenceTransformer('sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2')
 
 def clean_gujarati_text(text):
-    text = re.sub(r"[\"',।!?\\\-]", "", text)
-    return text.strip()
+    return re.sub(r"[\"',।!?\\\-]", "", text).strip()
 
 def is_valid_line(line):
     if not line.strip():
@@ -24,8 +25,7 @@ def is_valid_line(line):
 
 def split_gujarati_questions(text):
     split_lines = re.split(r"(પ્રશ્ન\s*\d+[\.\:\)]|Que\.\s*\d+[\.\:\)]?)", text)
-    cleaned = []
-    buffer = ""
+    cleaned, buffer = [], ""
     for part in split_lines:
         if re.match(r"(પ્રશ્ન\s*\d+[\.\:\)]|Que\.\s*\d+[\.\:\)]?)", part):
             if buffer.strip():
@@ -37,74 +37,71 @@ def split_gujarati_questions(text):
         cleaned.append(clean_gujarati_text(buffer))
     return [line for line in cleaned if len(line.split()) >= 3 and is_valid_line(line)]
 
-def extract_sentences(file, filename):
-    ext = filename.rsplit('.', 1)[-1].lower()
-    extracted = []
+@app.route('/')
+def index():
+    return render_template('index.html')
 
-    try:
+@app.route('/process', methods=['POST'])
+def process_file():
+    file = request.files.get('file')
+    if not file or file.filename == '':
+        return "No file selected", 400
+    filename = secure_filename(file.filename)
+    ext = filename.rsplit('.', 1)[-1].lower()
+
+    def generate():
+        extracted = []
         if ext == 'docx':
             doc = Document(file)
-            for p in doc.paragraphs:
+            total = len(doc.paragraphs)
+            for idx, p in enumerate(doc.paragraphs):
                 line = p.text.strip()
                 if line and is_valid_line(line):
                     for question in split_gujarati_questions(line):
                         extracted.append((question, "Page ~"))
+                yield f"data: {json.dumps({'progress': f'Reading paragraph {idx+1}/{total}'})}\n\n"
+                time.sleep(0.01)
         elif ext == 'pdf':
-            doc = fitz.open(stream=file.read(), filetype="pdf")
-            for i, page in enumerate(doc, start=1):
+            doc_pdf = fitz.open(stream=file.read(), filetype="pdf")
+            total = doc_pdf.page_count
+            for i, page in enumerate(doc_pdf, start=1):
                 text = page.get_text()
                 for line in text.split('\n'):
                     line = line.strip()
                     if line and is_valid_line(line):
                         for question in split_gujarati_questions(line):
                             extracted.append((question, f"Page {i}"))
+                yield f"data: {json.dumps({'progress': f'Reading page {i}/{total}'})}\n\n"
+                time.sleep(0.01)
         else:
-            return None
-    except Exception:
-        return None
+            yield f"data: {json.dumps({'error': 'Unsupported file type'})}\n\n"
+            return
 
-    return extracted if extracted else None
+        # Now embedding + similarity
+        sentences, pages = zip(*extracted) if extracted else ([], [])
+        if len(sentences) > 0:
+            yield f"data: {json.dumps({'progress': f'Encoding {len(sentences)} sentences'})}\n\n"
+            embeddings = model.encode(list(sentences), batch_size=64)
+            sim_matrix = cosine_similarity(embeddings)
+            duplicates, seen = [], set()
+            for i in range(len(sentences)):
+                if i in seen:
+                    continue
+                for j in range(i + 1, len(sentences)):
+                    if j in seen:
+                        continue
+                    if sim_matrix[i][j] >= 0.88:
+                        duplicates.append((
+                            sentences[i], pages[i],
+                            sentences[j], pages[j],
+                            round(sim_matrix[i][j], 4)
+                        ))
+                        seen.add(j)
+            yield f"data: {json.dumps({'done': True, 'duplicates': duplicates})}\n\n"
+        else:
+            yield f"data: {json.dumps({'done': True, 'duplicates': []})}\n\n"
 
-def detect_semantic_duplicates(file, filename):
-    data = extract_sentences(file, filename)
-    if not data:
-        return None
-
-    sentences, pages = zip(*data)
-    embeddings = model.encode(sentences)
-    duplicates = []
-    seen = set()
-
-    for i in range(len(sentences)):
-        if i in seen:
-            continue
-        for j in range(i + 1, len(sentences)):
-            if j in seen:
-                continue
-            score = cosine_similarity([embeddings[i]], [embeddings[j]])[0][0]
-            if score >= 0.88:
-                duplicates.append((sentences[i], pages[i], sentences[j], pages[j], round(score, 4)))
-                seen.add(j)
-
-    return duplicates
-
-@app.route('/')
-def index():
-    return render_template('index.html')
-
-@app.route('/upload', methods=['POST'])
-def upload():
-    if 'file' not in request.files:
-        abort(400, 'કોઈ ફાઇલ અપલોડ થઈ નથી')
-    file = request.files['file']
-    if file.filename == '':
-        abort(400, 'ફાઇલ પસંદ કરો')
-    filename = secure_filename(file.filename)
-    file.seek(0)
-    duplicates = detect_semantic_duplicates(file, filename)
-    if duplicates is None:
-        abort(400, 'ફાઇલ વાંચી શકાય તેવી .docx અથવા .pdf હોવી જોઈએ')
-    return render_template('result.html', duplicates=duplicates)
+    return Response(stream_with_context(generate()), mimetype='text/event-stream')
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=3000)
+    app.run(host='0.0.0.0', port=3000, threaded=True)
